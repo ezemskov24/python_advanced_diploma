@@ -1,90 +1,20 @@
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, APIRouter
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from database import engine, AsyncSessionLocal, Base
-from models import Tweet, Like, User, Follow
-from schemas import TweetIn, TweetResponse, UserOut, TweetOut, UserResponse
+from database.db_connection import get_db
+from .models import Tweet, Like, User, Follow
+from .schemas import TweetIn, TweetResponse, UserOut, TweetOut, UserResponse
+from .services import get_current_user, get_user_by_id, get_followers, get_followings
+
+router: APIRouter = APIRouter(
+    prefix="/api",
+)
 
 
-@asynccontextmanager
-async def lifespan(application: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    await engine.dispose()
-
-
-app = FastAPI(lifespan=lifespan)
-
-
-async def get_db():
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
-
-
-async def get_current_user(
-    db: AsyncSession = Depends(get_db), api_key: str = Header(...)
-):
-    user = await db.execute(select(User).where(User.api_key == api_key))
-    user = user.scalars().first()
-
-    if user is None:
-        raise HTTPException(status_code=403, detail="Invalid API key")
-
-    return user
-
-
-async def get_user_by_id(user_id: int, db: AsyncSession):
-    user_select = await db.execute(select(User).where(User.id == user_id))
-    user = user_select.scalars().first()
-
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return user
-
-
-async def tweet_query(idx: int, db: AsyncSession = Depends(get_db)):
-
-    tweet_select = await db.execute(select(Tweet).where(Tweet.id == idx))
-    tweet = tweet_select.scalars().first()
-
-    return tweet
-
-
-async def get_followers(user: User, db: AsyncSession):
-    followers_query = await db.execute(
-        select(User)
-        .join(Follow, Follow.user_id == User.id)
-        .where(Follow.follower_id == user.id)
-    )
-    return [
-        UserOut(id=follower.id, name=follower.name)
-        for follower in followers_query.scalars().all()
-    ]
-
-
-async def get_followings(user: User, db: AsyncSession):
-    followings_query = await db.execute(
-        select(User)
-        .join(Follow, Follow.follower_id == User.id)
-        .where(Follow.user_id == user.id)
-    )
-    return [
-        UserOut(id=following.id, name=following.name)
-        for following in followings_query.scalars().all()
-    ]
-
-
-@app.post("/api/tweets")
+@router.post("/tweets")
 async def post_new_tweet(
     tweet: TweetIn,
     user: User = Depends(get_current_user),
@@ -97,7 +27,7 @@ async def post_new_tweet(
     return {"result": True, "tweet_id": new_tweet.id}
 
 
-@app.delete("/api/tweets/{idx}")
+@router.delete("/tweets/{idx}")
 async def delete_own_tweet(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
@@ -117,7 +47,7 @@ async def delete_own_tweet(
     return {"result": True}
 
 
-@app.post("/api/users/{idx}/follow")
+@router.post("/users/{idx}/follow")
 async def follow_user(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
@@ -144,7 +74,7 @@ async def follow_user(
     return {"result": True}
 
 
-@app.delete("/api/users/{idx}/follow")
+@router.delete("/users/{idx}/follow")
 async def unfollow_user(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
@@ -166,7 +96,7 @@ async def unfollow_user(
     return {"result": True}
 
 
-@app.post("/api/tweets/{idx}/likes")
+@router.post("/tweets/{idx}/likes")
 async def like_to_tweet(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
@@ -189,7 +119,7 @@ async def like_to_tweet(
     return {"result": True}
 
 
-@app.delete("/api/tweets/{idx}/likes")
+@router.delete("/tweets/{idx}/likes")
 async def remove_like(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
@@ -212,7 +142,7 @@ async def remove_like(
     return {"result": True}
 
 
-@app.get("/api/tweets")
+@router.get("/tweets")
 async def get_tweets_by_followings(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
@@ -250,7 +180,7 @@ async def get_tweets_by_followings(
     return TweetResponse(result=True, tweets=result_tweets)
 
 
-@app.get("/api/users/me")
+@router.get("/users/me")
 async def get_user_info(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
@@ -264,7 +194,7 @@ async def get_user_info(
     )
 
 
-@app.get("/api/users/{idx}")
+@router.get("/users/{idx}")
 async def get_user_info_by_id(idx: int, db: AsyncSession = Depends(get_db)):
 
     user = await get_user_by_id(idx, db)

@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 
-DATABASE_URL = "postgresql+asyncpg://admin:admin@localhost/twitter_clone_db"
+DATABASE_URL = "postgresql+asyncpg://admin:admin@postgres:5432/twitter_clone_db"
 
 Base = declarative_base()
 
@@ -17,3 +17,11 @@ def get_session(engine):
 
 engine = get_engine(DATABASE_URL)
 AsyncSessionLocal = get_session(engine)
+
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
