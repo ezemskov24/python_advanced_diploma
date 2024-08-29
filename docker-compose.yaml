@@ -1,6 +1,21 @@
-version: '3.8'
+version: '3.9'
 
 services:
+
+  server:
+    container_name: social_network_server
+    build:
+      context: .
+      dockerfile: server/Dockerfile_server
+    ports:
+      - "8000:8000"
+    restart: always
+    volumes:
+      - ./client/static:/client/static
+    depends_on:
+      - postgres
+    networks:
+      - custom_network
 
   postgres:
     image: postgres:16
@@ -12,6 +27,25 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - custom_network
+
+  client:
+    container_name: social_network_client
+    build:
+      context: .
+      dockerfile: client/Dockerfile_client
+    ports:
+      - "8080:80"
+    depends_on:
+      server:
+        condition: service_started
+    networks:
+      - custom_network
 
 volumes:
   postgres_data:
+
+networks:
+  custom_network:
+    driver: bridge

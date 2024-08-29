@@ -12,7 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, backref
 
-from database import Base
+from database.db_connection import Base
 
 
 class Tweet(Base):
