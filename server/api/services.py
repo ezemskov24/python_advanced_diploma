@@ -1,10 +1,12 @@
+from uuid import uuid4
+
 from fastapi import Depends, HTTPException, Header
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import User, Follow
+from .models import User, Follow, Media
 from .schemas import UserOut
-from database.db_connection import get_db
+from server.database.db_connection import get_db
 
 
 async def get_current_user(
