@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 
-from database.db_connection import engine, Base
-from api.routers import router
+from server.database.db_connection import engine, Base
+from server.api.routers import router
 
 
 @asynccontextmanager
@@ -20,11 +20,11 @@ app: FastAPI = FastAPI()
 
 app.include_router(router)
 
-app.mount("/static", StaticFiles(directory="../client/static"))
-app.mount("/js", StaticFiles(directory="../client/static/js"))
-app.mount("/css", StaticFiles(directory="../client/static/css"))
+app.mount("/static", StaticFiles(directory="/static"), name="static")
+app.mount("/js", StaticFiles(directory="/static/js"), name="js")
+app.mount("/css", StaticFiles(directory="/static/css"), name="css")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return FileResponse("../client/static/templates/index.html")
+    return FileResponse("/static/index.html")

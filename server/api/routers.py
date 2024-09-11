@@ -1,13 +1,26 @@
-from fastapi import Depends, HTTPException, APIRouter
+import os
+from uuid import uuid4
+
+from fastapi import Depends, HTTPException, APIRouter, UploadFile, File
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from database.db_connection import get_db
-from .models import Tweet, Like, User, Follow
-from .schemas import TweetIn, TweetResponse, UserOut, TweetOut, UserResponse
+from server.database.db_connection import get_db
+from .models import Tweet, Media, Like, User, Follow, S3Client
+from .schemas import TweetIn, TweetResponse, UserOut, TweetOut, UserResponse, MediaResponse
 from .services import get_current_user, get_user_by_id, get_followers, get_followings
+from server.config import ACCESS_KEY, SECRET_KEY, ENDPOINT_URL, BUCKET_NAME, WEB_URL
+
+
+s3_client = S3Client(
+    access_key=ACCESS_KEY,
+    secret_key=SECRET_KEY,
+    endpoint_url=ENDPOINT_URL,
+    bucket_name=BUCKET_NAME,
+    web_url=WEB_URL
+)
 
 router: APIRouter = APIRouter(
     prefix="/api",
@@ -16,15 +29,55 @@ router: APIRouter = APIRouter(
 
 @router.post("/tweets")
 async def post_new_tweet(
-    tweet: TweetIn,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+        tweet: TweetIn,
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
-    new_tweet = Tweet(**tweet.model_dump(), user_id=user.id)
+    new_tweet = Tweet(content=tweet.content, user_id=user.id)
 
     db.add(new_tweet)
     await db.commit()
+    await db.refresh(new_tweet)
+
+    if tweet.tweet_media_ids:
+        media_files = await db.execute(
+            select(Media).where(Media.id.in_(tweet.tweet_media_ids))
+        )
+        media_files = media_files.scalars().all()
+
+        for media in media_files:
+            media.tweet_id = new_tweet.id
+
+        new_tweet.attachment = [media.file_link for media in media_files]
+
+        await db.commit()
+
     return {"result": True, "tweet_id": new_tweet.id}
+
+
+@router.post("/medias")
+async def upload_media(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    file_extension = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid4()}{file_extension}"
+
+    try:
+        file_content = await file.read()
+        await s3_client.upload_file_obj(file_content, unique_filename)
+
+        file_link = f"{s3_client.web_url}/{s3_client.bucket_name}/{unique_filename}"
+
+        media = Media(file_link=file_link)
+        db.add(media)
+        await db.commit()
+        await db.refresh(media)
+
+        return {"result": True, "media_id": media.id}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload media: {e}")
 
 
 @router.delete("/tweets/{idx}")
@@ -164,7 +217,7 @@ async def get_tweets_by_followings(
         TweetOut(
             id=tweet.id,
             content=tweet.content,
-            attachments=tweet.attachment,
+            attachments=tweet.attachment if tweet.attachment else [],
             user=UserOut(id=tweet.user.id, name=tweet.user.name),
             likes=[
                 {

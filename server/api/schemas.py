@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,11 +19,12 @@ class Like(BaseModel):
 
 
 class BaseTweet(BaseModel):
-    content: str = Field(..., title="Tweet text")
+    content: str = Field(..., title="tweet text")
 
 
 class TweetIn(BaseTweet):
-    attachment: List[str] = Field(default=[], title="List of attachments")
+    content: str = Field(..., alias="tweet_data")
+    tweet_media_ids: Optional[List[int]] = None
 
 
 class TweetOut(BaseTweet):
@@ -36,3 +37,8 @@ class TweetOut(BaseTweet):
 class TweetResponse(BaseModel):
     result: bool
     tweets: List[TweetOut]
+
+
+class MediaResponse(BaseModel):
+    result: bool
+    media_id: Optional[int]
