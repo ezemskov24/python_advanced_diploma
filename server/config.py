@@ -4,13 +4,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-DB_USER: str | None = os.environ.get("DB_USER")
-DB_PASS: str | None = os.environ.get("DB_PASS")
-DB_HOST: str | None = os.environ.get("DB_HOST")
-DB_PORT: str | None = os.environ.get("DB_PORT")
-DB_NAME: str | None = os.environ.get("DB_NAME")
-
+def get_database_url():
+    if os.environ.get("ENV") == "test":
+        return os.environ.get("DATABASE_URL_TEST")
+    else:
+        return os.environ.get("DATABASE_URL")
 
 ACCESS_KEY: str | None = os.environ.get("ACCESS_KEY")
 SECRET_KEY: str | None = os.environ.get("SECRET_KEY")
