@@ -1,5 +1,6 @@
 import os
 from uuid import uuid4
+from typing import Dict, Any
 
 from fastapi import Depends, HTTPException, APIRouter, UploadFile, File
 from sqlalchemy import func
@@ -9,7 +10,13 @@ from sqlalchemy.orm import selectinload
 
 from server.database.db_connection import get_db
 from .models import Tweet, Media, Like, User, Follow, S3Client
-from .schemas import TweetIn, TweetResponse, UserOut, TweetOut, UserResponse, MediaResponse
+from .schemas import (
+    TweetIn,
+    TweetResponse,
+    UserOut,
+    TweetOut,
+    UserResponse,
+)
 from .services import get_current_user, get_user_by_id, get_followers, get_followings
 from server.config import ACCESS_KEY, SECRET_KEY, ENDPOINT_URL, BUCKET_NAME, WEB_URL
 
@@ -19,7 +26,7 @@ s3_client = S3Client(
     secret_key=SECRET_KEY,
     endpoint_url=ENDPOINT_URL,
     bucket_name=BUCKET_NAME,
-    web_url=WEB_URL
+    web_url=WEB_URL,
 )
 
 router: APIRouter = APIRouter(
@@ -28,11 +35,22 @@ router: APIRouter = APIRouter(
 
 
 @router.post("/tweets")
-async def post_new_tweet(
-        tweet: TweetIn,
-        user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
-):
+async def create_new_tweet(
+    tweet: TweetIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Create a new tweet.
+
+    Args:
+        tweet (TweetIn): The tweet data.
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        dict: The result of the operation with the tweet ID.
+    """
     new_tweet = Tweet(content=tweet.content, user_id=user.id)
 
     db.add(new_tweet)
@@ -57,9 +75,18 @@ async def post_new_tweet(
 
 @router.post("/medias")
 async def upload_media(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
-):
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Upload a media file to S3 and create a record in the database.
+
+    Args:
+        file (UploadFile): The media file to upload.
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        dict: The result of the operation with the media ID.
+    """
     file_extension = os.path.splitext(file.filename)[1]
     unique_filename = f"{uuid4()}{file_extension}"
 
@@ -83,7 +110,18 @@ async def upload_media(
 @router.delete("/tweets/{idx}")
 async def delete_own_tweet(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+) -> Dict[str, Any]:
+    """
+    Delete a tweet created by the authenticated user.
+
+    Args:
+        idx (int): The ID of the tweet to delete.
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        dict: The result of the operation.
+    """
     tweet = await db.get(Tweet, idx)
 
     if tweet is None:
@@ -103,7 +141,18 @@ async def delete_own_tweet(
 @router.post("/users/{idx}/follow")
 async def follow_user(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+) -> Dict[str, Any]:
+    """
+    Follow another user.
+
+    Args:
+        idx (int): The ID of the user to follow.
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        dict: The result of the follow operation.
+    """
     follower = await get_user_by_id(idx, db)
 
     if user.id == follower.id:
@@ -130,7 +179,18 @@ async def follow_user(
 @router.delete("/users/{idx}/follow")
 async def unfollow_user(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+) -> Dict[str, Any]:
+    """
+    Unfollow a user.
+
+    Args:
+        idx (int): The ID of the user to unfollow.
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        dict: The result of the unfollow operation.
+    """
     follower = await get_user_by_id(idx, db)
 
     existing_follow = await db.execute(
@@ -152,7 +212,18 @@ async def unfollow_user(
 @router.post("/tweets/{idx}/likes")
 async def like_to_tweet(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+) -> Dict[str, Any]:
+    """
+    Like a tweet.
+
+    Args:
+        idx (int): The ID of the tweet to like.
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        dict: The result of the like operation.
+    """
     tweet = await db.get(Tweet, idx)
 
     if tweet is None:
@@ -175,7 +246,18 @@ async def like_to_tweet(
 @router.delete("/tweets/{idx}/likes")
 async def remove_like(
     idx: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+) -> Dict[str, Any]:
+    """
+    Remove a like from a tweet.
+
+    Args:
+        idx (int): The ID of the tweet to remove the like from.
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        dict: The result of the operation.
+    """
     tweet = await db.get(Tweet, idx)
 
     if tweet is None:
@@ -198,7 +280,17 @@ async def remove_like(
 @router.get("/tweets")
 async def get_tweets_by_followings(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+) -> TweetResponse:
+    """
+    Retrieve tweets by users the authenticated user follows.
+
+    Args:
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        TweetResponse: The response containing the list of tweets and associated details.
+    """
     following_query = await db.execute(
         select(Follow.follower_id).where(Follow.user_id == user.id)
     )
@@ -236,7 +328,17 @@ async def get_tweets_by_followings(
 @router.get("/users/me")
 async def get_user_info(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+) -> UserResponse:
+    """
+    Get authenticated user's profile information, followers, and followings.
+
+    Args:
+        user (User): The authenticated user (from dependencies).
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        UserResponse: The response containing user details, followers, and followings.
+    """
     followers = await get_followers(user, db)
     followings = await get_followings(user, db)
 
@@ -248,8 +350,19 @@ async def get_user_info(
 
 
 @router.get("/users/{idx}")
-async def get_user_info_by_id(idx: int, db: AsyncSession = Depends(get_db)):
+async def get_user_info_by_id(
+    idx: int, db: AsyncSession = Depends(get_db)
+) -> UserResponse:
+    """
+    Get profile information, followers, and followings for a user by ID.
 
+    Args:
+        idx (int): The ID of the user to retrieve.
+        db (AsyncSession): Database session (from dependencies).
+
+    Returns:
+        UserResponse: The response containing user details, followers, and followings.
+    """
     user = await get_user_by_id(idx, db)
 
     followers = await get_followers(user, db)

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+
 from aiobotocore.session import get_session
 from botocore.exceptions import ClientError
 from sqlalchemy import (
@@ -19,6 +20,17 @@ from server.database.db_connection import Base
 
 
 class Tweet(Base):
+    """
+    Model representing tweets in the system.
+
+    Attributes:
+        id (int): Unique identifier for the tweet.
+        content (str): The textual content of the tweet.
+        attachment (ARRAY[str]): An array of strings, storing media file links.
+        user_id (int): Foreign key referring to the user who created the tweet.
+        created_at (datetime): The timestamp when the tweet was created, defaults to current time.
+    """
+
     __tablename__ = "tweets"
     id = Column(Integer, autoincrement=True, primary_key=True)
     content = Column(Text)
@@ -30,6 +42,18 @@ class Tweet(Base):
 
 
 class User(Base):
+    """
+    Model representing users in the system.
+
+    Attributes:
+        id (int): Unique identifier for the user.
+        username (str): Username (unique).
+        api_key (str): API key for authentication.
+        name (str): Real name of the user.
+        email (str): Email address of the user (unique).
+        created_at (datetime): Timestamp when the user was created.
+    """
+
     __tablename__ = "users"
     id = Column(Integer, autoincrement=True, primary_key=True)
     username = Column(String(50), unique=True, nullable=False)
@@ -40,6 +64,15 @@ class User(Base):
 
 
 class Like(Base):
+    """
+    Model representing likes made by users on tweets.
+
+    Attributes:
+        id (int): Unique identifier for the like.
+        user_id (int): Foreign key referring to the user who liked the tweet.
+        tweet_id (int): Foreign key referring to the liked tweet.
+    """
+
     __tablename__ = "likes"
 
     id = Column(Integer, autoincrement=True, primary_key=True)
@@ -51,6 +84,15 @@ class Like(Base):
 
 
 class Follow(Base):
+    """
+    Model representing follow relationships between users.
+
+    Attributes:
+        id (int): Unique identifier for the follow relationship.
+        user_id (int): Foreign key referring to the user who is following.
+        follower_id (int): Foreign key referring to the user being followed.
+    """
+
     __tablename__ = "followers"
 
     id = Column(Integer, autoincrement=True, primary_key=True)
@@ -68,6 +110,15 @@ class Follow(Base):
 
 
 class Media(Base):
+    """
+    Model representing media files attached to tweets.
+
+    Attributes:
+        id (int): Unique identifier for the media file.
+        file_link (str): Link to the media file stored in S3.
+        tweet_id (int): Foreign key referring to the tweet the media is attached to.
+    """
+
     __tablename__ = "media"
 
     id = Column(Integer, autoincrement=True, primary_key=True)
@@ -78,13 +129,28 @@ class Media(Base):
 
 
 class S3Client:
+    """
+    Class for interacting with S3-compatible storage.
+
+    Params:
+        access_key (str): Access key for authentication.
+        secret_key (str): Secret key for authentication.
+        endpoint_url (str): URL of the S3-compatible storage.
+        bucket_name (str): Name of the S3 bucket where files are uploaded.
+        web_url (str): Base URL for accessing files via HTTP.
+
+    Methods:
+        get_client(): Returns an S3 client for interacting with storage.
+        upload_file_obj(file_obj, object_name): Asynchronously uploads a file to S3.
+    """
+
     def __init__(
-            self,
-            access_key: str,
-            secret_key: str,
-            endpoint_url: str,
-            bucket_name: str,
-            web_url: str,
+        self,
+        access_key: str,
+        secret_key: str,
+        endpoint_url: str,
+        bucket_name: str,
+        web_url: str,
     ):
         self.config = {
             "aws_access_key_id": access_key,
@@ -97,10 +163,22 @@ class S3Client:
 
     @asynccontextmanager
     async def get_client(self):
-        async with self.session.create_client("s3", **self.config, verify=False) as client:
+        """
+        Asynchronous context manager for obtaining an S3 client.
+        """
+        async with self.session.create_client(
+            "s3", **self.config, verify=False
+        ) as client:
             yield client
 
     async def upload_file_obj(self, file_obj, object_name: str):
+        """
+        Asynchronously uploads a file object to S3.
+
+        Params:
+            file_obj: The file object to upload.
+            object_name (str): The name of the file in the bucket.
+        """
         try:
             async with self.get_client() as client:
                 await client.put_object(

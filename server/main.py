@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -16,15 +17,26 @@ async def lifespan(application: FastAPI):
     await engine.dispose()
 
 
-app: FastAPI = FastAPI()
+app: FastAPI = FastAPI(lifespan=lifespan)
 
 app.include_router(router)
 
-app.mount("/static", StaticFiles(directory="/static"), name="static")
-app.mount("/js", StaticFiles(directory="/static/js"), name="js")
-app.mount("/css", StaticFiles(directory="/static/css"), name="css")
+static_dir = "/static"
+if os.path.isdir(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+js_dir = "/static/js"
+if os.path.isdir(js_dir):
+    app.mount("/js", StaticFiles(directory=js_dir), name="js")
+
+css_dir = "/static/css"
+if os.path.isdir(css_dir):
+    app.mount("/css", StaticFiles(directory=css_dir), name="css")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
+    """
+    Render main page
+    """
     return FileResponse("/static/index.html")
