@@ -31,7 +31,7 @@
 Склонировать проект:
 
 ```
-git clone [https://gitlab.skillbox.ru/egor_zemskov/python_advanced_diploma.git](https://github.com/ezemskov24/social_network_backend.git)
+git clone https://github.com/ezemskov24/social_network_backend.git
 ```
 В репозитории хранится файл .env.template. Надо на его основе создать и заполнить файл .env 
 
